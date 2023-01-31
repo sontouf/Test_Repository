@@ -461,15 +461,384 @@ int main(int argc, char** argv) {
 }
 ```
 
+main 함수의 첫 번째 명령어로는 car_t 자료형에서 변수 car를 선언했다. 변수 car는 첫 번째 car 객체이다. 이 행에서 객체의 속성을 위한 메모리를 할당했다. 다음 행에서는 객체를 생성했다. 이 행에서는 속성을 초기화했다. 객체는 속성을 위해 할당된 메모리가 있을 때만 초기화할 수 있다. 코드에서 생성자는 두 번쨰 인자로 car 의 이름을 받는다. car 객체의 주소는 모든 car_* 행위 함수로 전달됨을 알 수 있다.
+
+while 루프 안에서 main 함수는 fuel 속성을 읽고 그 값이 0보다 큰지 검사한다. main 함수는 행위 함수가 아니며, main 함수가 car 의 속성에 접근할 수 있다는 점은 중요하다. 예를 들어 fuel 과 speed 라는 속성은 __공개__ 속성에 관한 예시에 해당하며, 공객 속성은 행위 함수 이외의 함수가 접근할 수 있다.
+
+main 함수를 떠나 프로그램을 종료하기 전에 car 객체를 소멸시켜야 한다. 이는 단순히 이 단계에서 객체가 할당한 리소스가 해제되어야 함을 의미한다. 이 예제의 car 객체에서는 객체의 소멸을 위해 해야 할 일이 없다. 하지만 언제나 이렇지는 않고 소멸에 필요한 단계가 있다. 힙 할당의 경우 소멸 단계는 의무이며 이는 메모리 누수를 방지한다.
+
+앞의 예제를 C++를 어떻게 작성할 수 있는지 알아보자. 그러면 OOP 언어가 클래스와 객체를 어떻게 이해하는지, 그리고 적절한 객체지향 코드를 작성하는 오버헤드를 어떻게 줄이는지를 이해하는 데 도움이 된다.
 
 
 
+```c++
+#ifndef CAR_H
+#define CAR_H
+
+class Car {
+    public:
+    	Car(const char*); // 생성자
+    	~Car();			  // 소멸자
+    
+    	void Accelerate();
+    	void Brake();
+    	void Refuel(double);
+    
+    	// 데이터 멤버 (C 에서는 속성)
+    	char name[32];
+    	double speed;
+    	double fuel;
+};
+
+#endef
+```
+
+이 코드의 주요 특징은 C++가 클래스를 이해한다는 사실이다. 그러므로 코드는 명시적 캡슐화를 나타내며 속성과 함수를 둘 다 캡슐화한다. 게다가 C++는 생성자나 소멸자와 같은 더 객체지향적인 개념을 지원한다.
+
+C++ 에서 속성과 함수의 모든 선언은 클래스 정의에서 캡슐화된다. 이것은 명시적 캡슐화이다. 클래스의 생성자와 소멸자로서 선언한 처음 두 함수를 보자. C는 생성자와 소멸자를 이해하지 못한다. 하지만 C++는 이들에 관한 구체적 표기법이 있다. 예를 들면 소멸자는 ~로 시작하며 클래스와 이름이 같다.
+
+게다가 행위 함수에는 첫 번째 포인터 인자가 없다. 행위함수 클래스 속성에 모두 접근 할 수 있기 때문이다.
 
 
 
+```C++
+// car.cpp
+# include <string.h>
+
+# include "CAR_H"
+
+Car::Car(const char* name) {
+    strcpy(this->name, name);
+    this->speed = 0.0;
+    this->fuel = 0.0;
+}
+
+Car::~Car() {
+    // 할 일이 없다.
+}
+
+void Car::Accelerate() {
+    this->speed += 0.05;
+    this->fuel -= 1.0;
+    if (this->fuel < 0.0) {
+        this->fuel = 0.0;
+    }
+}
+
+void Car::Brake() {
+    this->speed -= 0.07;
+    if (this->speed < 0.0) {
+        this->speed = 0.0;
+    }
+    this->fuel -= 2.0;
+    if (this->fuel < 0.0) {
+        this->fuel = 0.0;
+    }
+}
+
+void Car::Refuel(double amount) {
+    this->fuel = amount;
+}
+```
+
+잘 살펴보면 C 코드의 car 포인터가 C++의 키워드인 this 포인터로 대체되었다. this 라는 키워드는 단순히 현재 객체를 의미한다. 더 자세히 설명하지는 않지만, C의 포인터 인자를 제거하고 행위함수를 더 간단하게 만드는 영리한 해결책이다.
 
 
 
+```c++
+//main.cpp
+# include <iostream>
+
+# include "CAR_H"
+
+int main(int argc, char** argv)
+{
+    Car car("Renault");
+    
+    car.Refuel(100.0);
+    std::cout << "Caar is refueled, the correct fuel level is " << car.fuel << std::endl;
+    while (car.fuel > 0) {
+        std::cout << "Car fuel level: " << car.fuel << std::endl;
+        if (car.speed < 80) {
+            car.Accelerate();
+            std::cout << "Car has been accelerated to the speed: " << car.speed << std::endl;
+        } else {
+            car.Brake();
+            std::cout << "Car has been slowed down to the speed: " << car.speed << std::endl;
+        }
+    }
+    
+    std::cout << "Caar ran out of the fuel! Slowing down ..." << std::endl;
+    while (car.speed > 0) {
+        car.Brake();
+		std::cout << "Car has been accelerated to the speed: " << car.speed << std::endl;
+    }
+    std::cout << "Car is stopped!" << std::endl;
+    
+    // 함수를 떠날 때, 객체 'car' 는 자동적으로 소멸된다.
+    return 0;
+}
+
+```
+
+C++ 에서 작성한 main 함수는 C에서 쓴 것과 매우 비슷하지만, 구조체 변수 대신 클래스 변ㄴ수에 메모리가 할당된다는 점이 다르다. C에서는 C가 인지하는 번들안에 속성과 행위 함수를 같이 둘 수 없다. 대신 파일을 이용해서 같이 묶어야 한다. 하지만 C++ 에서는 이러한 번들을 위한 문법이 있으며 이는 __클래스 정의__ 이다. 클래스 정의는 데이터 멤버와 멤버 함수를 같은 곳에 두도록 한다.
+
+
+
+C++가 캡슐화를 알고 있으므로 포인터 인자를 행위 함수에 전달하지 않아도 된다. 그리고 C++ 에서는 C 버전의 Car 클래스에서 봤던 것과는 달리 멤버 함수의 첫 번째 인자로 포인터를 갖지 않는다.
+
+
+
+절차지향 프로그래밍 언어인 C와 객체지향 언어인 C++, 두 언어에서 객체지향 프로그램을 작성했다. 가장 큰 변화는 car_accelerate(&car) 대신 car.Accelerate() 를 사용한 점, 또는 car_refuel(&car, 1000.00) 대신 car.Refuel(1000.0)을 사용했다는 점이다.
+
+즉 절차지향적 프로그래밍 언어에서 func(obj, a, b, c, ...) 와 같이 호출한다면, 객체지향 언어에서는 obj.func(a, b, c, ...) 로 호출할 수 있다. 이는 같지만 다른 프로그래밍 패러다임에서 기인한다.
+
+마지막 C 와 C++ 사이에는 객체 소멸에 관한 중요한 차이가 있다. C++ 에서 소멸자 함수는 객체가 스택 가장 위에 할당되어 스코프를 벗어나려 할 때마다 다른 스택 변수처럼 자동으로 호출된다. 이는 C++ 의 메모리 관리가 이룩한 큰 성과이다. C 에서는 소멸자 함수를 호출하는 것을 잊기 쉬워서 결국 메모리 누수가 발생할 수  있기 때문이다.
+
+
+
+### 6.3.3 정보 은닉
+
+캡슐화의 또 다른 목적 또는 결과는 바로 __정보 은닉__ 이다. 정보 은닉은 외부 세계에 보이지 않아야 하는 어떠한 속성이나 행위를 보호하는 역할이다. 외부세계란 객체의 행위에 속하지 않는 모든 코드를 의미한다. 만약 해당 속성이나 행위가 클래스의 공용 인터페이스에 속하지 않으면, 이 정의에 의해서 다른 코드나 다른 C 함수는 객체의 비공개 속성이나 행위에 접근할 수 없다.
+
+참고로 Car 클래스에서 car1 이나 car2 처럼 같은 자료형인 두 객체의 행위는 같은 자료형의 모든 객체의 속성에 접근할 수 있다. 클래스의 모든 객체에 대해 행위 함수는 단 한번만 작성하기 때문이다.
+
+예제에서 main 함수는 car_t 속성 구조체의 speed  와 fuel 속성에 쉽게 접근했다. car_t 자료형의 모든 속성이 공개 속성이었다는 뜻이다. 공개 속성 또는 행위를 갖는 건 바람직하지 못하다. 이들은 오래 지속되며 위험할 수 있기 때문이다. 그 결과 구현의 세부 사항이 유출될 수 있다. car 객체를 사용한다고 가정해보자. 일반적으로는 자동차를 가속한다는 행위를 가진다는 사실만이 중요하다. 어떻게 가속할 수 있는지는 별로 궁금하지 않다. 객체 내에는 가속 과정에 영향을 주는 더 많은 내부 속성이 있다. 하지만 사용자 로직에 이러한 속성이 보여야 할 마땅한 이유는 없다.
+
+예를 들어 엔진 스타터에 전달되는 전류는 속성이 될 수 있다. 하지만 객체 자신에게 비공개여야 한다. 이는 또한 객체 내부의 특정 행위에도 적용된다. 연소실에 연료를 주입하는 일은 내부 행위이며 사용자가 볼 수 있거나 접근할 수 있어서는 안된다. 만약 그렇게 된다면 사용자가 엔진의 통상적인 절차에 끼어들어 방해할 수 있다.
+
+다른 관점에서 보면 ㄴ실행의 세부사항은 제조사마다 다르지만, 자동차를 가속할 수 있다는 행위는 모든 자동차 제조사가 제공한다. 보통 자동차를 가속할 수 있는 행위를 Car 클래스의  __공개 API__ 또는 __공용 인터페이스__ 라고 한다.
+
+일반적으로 객체를 사용하는 코드는 그 객체의 공개 속성과 행위에 의존적이다. 이는 매우 중요한 문제이다. 먼저 내부 속성을 공개 속성으로 선언해 유출한 뒤 비공개로 바꾸면 종속된 코드의 빌드가 사실상 깨질 수 있다. 공개된 속성을 사용하는 코드는 해당 속성이 비공개가 되면 변경된 이후 컴파일되지 않는다. 이는 하위 호환성이 손상되었음을 의미하낟. 그러므로 우리는 보수저깅ㄴ 접근법을 취하며, 속성을 공개로 두어야 항 합리적인 이유를 찾을 때까지 기본적으로 모든 속성을 비공개로 둔다.
+
+간단히 말하자면 클래스의 비공개 코드를 노출한다는 것은 사실상 가벼운 공용 인터페이스가 아닌, 길게 서술된 구현에 의존적이라는 의미이다. 이는 심각한 결과로 이어지고 프로젝트의 상당 부분을 다시 작업해야 할 수도 있다. 그러므로 속성과 행위를 가능한 한 비공개로 두어야 한다.
+
+
+
+```c
+//list.h
+
+# ifndef LIST_H
+# define LIST_H
+
+# include <unistd.h>
+
+// 공개된 속성이 없는 속성 구조체
+struct list_t;
+
+// 할당 함수
+struct list_t * list_malloc();
+
+// 생성자 및 소멸자 함수
+void list_init(struct list_t *);
+void list_destroy(struct list_t *);
+
+// 공개 행위 함수
+int list_add(struct list_t*, int);
+int list_get(struct list_t*, int, int *);
+void list_clear(struct list_t*);
+size_t list_size(struct list_t *);
+void list_print(struct list_t *);
+
+#endif
+```
+
+이 코드 박스는 속성을 비공개로 두는 방법을 보여준다. main 함수를 포함하는 파일처럼 다른 소스파일이 위의 헤더를 포함하는 경우,  list_t 자료형 내부의 속성에는 접근하지 못한다. 이유는 간단하다. list_t는 정의가 없는 구조체 선언일 뿐이며 이 구조체의 필드에는 접근할 수 없다. list_t 로는 변수를 선언할 수도 없다. 이러한 방식으로 확실하게 정보를 은닉할 수 있다. 실로 대단한 성과이다.
+
+
+
+다시 한번 말하자면 헤더 파일을 만들고 내보내기 전에 무언가를 공개로 둘지 아닐지를 반드시 이중 점검해야 한다. 공개 행위 또는 공개 속성을 노출하면 객체를 소멸시킬 때 종속성이 생겨서 시간과 노력, 그리고 결국 돈과 같은 비용이 든다.
+
+
+
+```c
+// list.c
+# include <stdio.h>
+# include <stdlib.h>
+
+#define MAX_SIZE 10
+// bool_t 형의 별칭 정의
+typedef int bool_t;
+
+// list_t 형 정의
+typedef struct {
+    size_t size;
+    int* items;
+} list_t;
+
+// 리스트가 가득 찼는지 확인하는 비공개 행위
+bool_t __list_is_full(list_t* list) {
+    return (list->size == MAX_SIZE);
+}
+
+// 인덱스를 확인하는 또 다른 비공개 행위
+bool_t __check_index(list_t* list, const int index) {
+    return (index >= 0 && index <= list->size);
+}
+
+// 리스트 객체에 관한 메모리를 할당
+list_t* list_malloc() {
+    return ((list_t*)malloc(sizeof(list_t));
+}
+
+// 리스트 객체에 대한 생성자
+void list_init(list_t* list) {
+    list->size = 0;
+    // 힙 메모리에서 할당
+    list->items = (int*)malloc(MAX_SIZE * sizeof(int));
+}
+            
+// 리스트 객체에 관한 소멸자
+void list_destroy(list_t* list) {
+    // 할당된 메모리를 해제
+    free(list->items);
+}
+    
+int list_add(list_t* list, const int item) {
+    // 비공개 행위의 사용법
+    if (__list_is_full(list)) {
+        return -1;
+    }
+    list->items[list->size++] = item;
+    return 0;
+}
+           
+int list_get(list_t* list, const int index, int* result) {
+    if (__check_index(list, index)) {
+        *result = list->items[index];
+        return 0;
+    }
+    return -1;
+}            
+     
+void list_clear(list_t* list) {
+    list->size = 0;
+}
+            
+size_t list_size(list_t* list) {
+    return list->size;
+}
+            
+void list_print(list_t* list) {
+    printf("[");
+    for (size_t i = 0; i < list->size; i++) {
+        printf("%d ", list->items[i]);
+    }
+    printf("]");
+}
+```
+
+이 코드 박스에서 모든 정의는 비공개이다. list_t 객체를 사용할 외부 로직은 코드의 실행에 대해서는 아무것도 모른다. 그리고 헤더파일이 외부 코드가 의존할 유일한 코드이다.
+
+이 파일은 심지어 헤더파일조차 포함하지 않는다. 정의와 함수 시그니처가 헤더 파일의 선언과 일치하기만 하면 된다. 그렇기는 해도 선언 및 그에 해당하는 정의 사이의 호환성을 보장하므로 이렇게 작성하기를 권장한다. 2장에서 살펴봤듯 소스 파일은 따로따로 컴파일 되어 마지막에 함께 링크된다.
+
+사실 링커는 비공개 정의를 공개 선언으로 가져와서 작업 프로그램을 만든다.
+
+```
+비공개 행위 함수에 다른 표현법을 사용할 수 있다. 이름에 접두어 __를 사용하는 방법이다. 에를 들면 __check_index 함수는 비공개 함수이다. 비공개 함수에 대한 선언부분은 헤더 파일에 없으니 주의하자.
+```
+
+
+
+```c
+// main.h
+
+# include <stdlib.h>
+
+# include "list.h"
+
+int reverse(struct list_t * source, struct list_t * dest) {
+    list_clear(dest);
+    for (size_t i = list_size(source) - 1; i >= 0; i--) {
+        int item;
+        if (list_get(source, i, &item)) {
+            return -1;
+        }
+        list_add(dest, item);
+    }
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    struct list_t * list1 = list_malloc();
+    struct list_t * list2 = list_malloc();
+    
+    list_init(list1);
+    list_init(list2);
+    
+    list_add(list1, 4);
+    list_add(list1, 6);
+    list_add(list1, 1);
+    list_add(list1, 5);
+    
+    list_add(list2, 9);
+    
+    reverse(list1, list2)
+    list_print(list1);
+    list_print(list1);
+    
+    // 소멸
+    list_destroy(list1);
+    list_destroy(list2);
+    
+    free(list1);
+    free(list2);
+    return 0;
+}
+```
+
+이 코드 박스에서 main과 reverse 함수는 헤더 파일에서 선언한 내용만을 토대로 작성했다. 즉, 이들 함수는 List 클래스의 공개 API 만을 사용한다. 이 공개 API는 속성 구조체 list_t 의 선언과 행위 함수에 관한 것이다. 이는 종속성을 없애고 코드의 다른 부분으로부터 구현의 세부 사항을 은닉하는 좋은 사례이다.
+
+앞의 코드에 대해 여기서 더 알아볼 사항이 있다. list_t 객체에 메모리를 할당하려면 list_malloc 함수가 필요하다. 그리고 객체에서 할당했던 메모리를 해제하려면 free 함수를 사용한다.
+
+앞의 예제에서 malloc 을 직접 사용할 수 없다. main 함수 안에서 malloc 을 사용할 때는 할당에 필요한 바이트의 숫자를 sizeof(list_t) 로 전달해야 한다. 하지만 불완전한 형식에는 sizeof 를 사용할 수 없다.
+
+헤더 파일에서 포함하는 list_t 자료형은 __불완전한 형식__ 이다. 내부 필드에 아무 정보도 제공하지 않는 단순한 선언일 뿐이고, 컴파일할 때 이 자료형의 크기를 모르기 때문이다. 실제 크기는 구현의 세부 사항을 알게 되는 링크 시에만 결정된다. 이를 해결하기 위해 list_malloc 을 정의해 sizeof(list_t) 가 결정되는 곳에 malloc 을 사용해야 한다.
+
+```shell
+$ gcc -c list.c -o private-o
+$ gcc -c main.c -o main.o
+```
+
+비공개 부분은 private.o 로 컴파일했으며 main 함수는 main.o 로 컴파일 했다. 헤더파일은 컴파일하지 않는다는 점을 기억하자. 헤더 파일의 공개 선언은 main.o 목적 파일에 포함되었다.
+
+이제 링크하자
+
+```shell
+$ gcc main.o private.o -o exe.out
+$ ./exe.out
+[4 6 1 5]
+[5 1 6 4]
+$
+```
+
+List 클래스 다음에 나오는 구현을 변경한다면 무슨 일이 발생할까?
+
+배열을 사용하는 대신 연결 리스트를 사용한다고 해보자. main.o 를 다시 만들 필요는 없어 보인다. main.o 가 사용하는 리스트 구현 내용과 독립적이기 때문이다. 따라서 private.o 처럼 새 구현에 관한 새로운 객체 파일만을 컴파일하고 생성해보자. 그런 다음 목적 파일을 다시 링크해 새로운 실행파일을 만들어보자.
+
+```shell
+$ gcc main.o private2.o -o exe.out
+$ ./exe.out
+[4 6 1 5]
+[5 1 6 4]
+$
+```
+
+사용자 관점에서는 아무것도 변하지 않았다. 하지만 근본적인 구현은 바뀌었다. 이는 대단한 성과이며 C 프로젝트에서 많이 사용되는 접근법이다.
+
+새로운 리스트 구현에 관한 경우에서 링크 단계를 반복하고 싶지 않다면 어떻게 해야 할까? 그때는 비공개 목적 파일을 포함하는 공유 라이브러리를 사용한다. 그러면 런타임 시 동적으로 로드할 수 있으며 실행 파일을 다시 링크하지 않아도 된다. 공유 라이브러리에 관해서는 3장에서 설명했다.
+
+
+
+## 6.4 마무리
+
+- 객체지향 철학 및 마인드맵에서 객체 모델을 도출하는 방법을 설명했다
+- 도메인의 개념을 소개했고, 서로 관련이 있는 개념 및 생각ㅇ르 다루고자 마인드맵으로 필터링할 때 도메인을 사용하는 법을 설명했다.
+- 단일 객체의 속성과 행위를 소개했으며, 마인드맵 또는 도메인이 서술하는 요구 사항에서 속성과 행위를 추출하는 방법을 설명했다.
+- C가 OOP 언어가 될 수 없는 이유를 설명했고, OOP 프로그램을 궁극적으로 CPU 에서 실행될 저수준의 어셈블리 명령어로 변환하는 것에 대한 C의 역할을 알아봤다.
+- OOP의 첫 번쨰 원칙으로 캡슐화를 다뤘다. 속성의 묶음 그리고 행위의 묶음 포함하는 캡슐을 만드는 캡슐화를 사용했다.
+- 정보 은닉도 학습했다. 그리고 정보 은닉이 구현에 의존하지 않고 사용될 수 있는 인터페이스로 어떻게 이어지는지도 알아봤다.
+- 정보 은닉을 학습할 때 C 코드에서 속성이나 메서드를 비공개로 만드는 법의 예를 들었다.
 
 
 

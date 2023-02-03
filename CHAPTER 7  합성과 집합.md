@@ -353,5 +353,187 @@ void player_drop_gun(struct player_t*);
 
 다시 강조하지만 gun_t 및 player_t 구조체에 대해 전방 선언해야 한다. gun_t 형을 선언해야 하는 이유는 Player 클래스에서 행위 함수가 gun_t 형에 대한 인수를 갖기 때문이다.
 
+```c
+//player.c
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
+#include "gun.h"
+
+// 속성 구조체
+typedef struct {
+    char* name;
+    struct gun_t* gun;
+} player_t;
+
+// 메모리 할당자
+player_t* player_new() {
+    return (player_t*)malloc(sizeof(player_t));
+}
+
+// 생성자
+void player_ctor(player_t* player, const char* name) {
+    player->name = (char*)malloc((strlen(name) + 1) * sizeof(char));
+    strcpy(player->name, name);
+    
+    // 중요한 부분이다. 생성자에서 집합 포인터가 설정되지 않는 경우, 집합 포인터를 NULL 로 두어야 한다.
+    player->gun = NULL;
+}
+
+// 소멸자
+void player_dtor(player_t* player) {
+    free(player->name);
+}
+
+// 행위함수
+void player_pickup_gun(player_t* player, struct gun_t* gun) {
+    // 다음 행 이후, 합성 관계가 시작된다.
+    player->gun = gun;
+}
+
+void player_shoot(player_t* player) {
+    // 플레이어가 총을 들었는지 확인해야 한다. 총을 들지 않앗다면, 발사가 무의미하다.
+    if (player->gun) {
+        gun_trigger(player->gun);
+    } else {
+        printf("플레이어는 쏘고 싶지만 총이 없다.");
+        exit(1);
+    }
+}
+
+void player_drop_gun(player_t* player) {
+    // 다음 행 이후 두 객체 간 합성 관계가 종료된다. 총 객체는 해제하면 안된다. 플레이어 객체는 합성 때처럼 총 객체의 소유자가 아니기 떄문이다.
+    player->gun = NULL;
+}
+```
+
+ player_t 구조체 내부에서 포인터 속성인 gun을 선언하는 데 이 속성은 곧 gun 객체를 가리킨다. 생성자에서는 이 속성을 NULL로 두어야 하는데, 합성과는 달리 이 속성이 생성자에서 설정되지 않기 떄문이다.
+
+만약 집합 포인터가 생성 시 설정되어야 한다면, 대상 객체의 주소를 생성자의 인수로 전달해야 한다. 이러한 상황은 __의무적 집합 mandatory aggregation__ 이라고 한다.
+
+만약 집합 포인터가 생성자에서 NULL로 남아 있을 수 있다면 __선택적 집합__ 이며 앞의 코드가 이에 해당한다. 생성자에서 선택적 집합 포인터를 NULL로 두는 것이 중요하다.
+
+player_pickup_gun 함수에서는 집합 관계가 시작되면 player_drop_gun 함수에서 이 관계가 종료된다.
+
+집합관계가 종료된 뒤 gun 포인터를 NULL 로 두어야 한다는 점을 명심하자. 합성과 달리 컨테이너 객체는 컨테이너에 포함된 객체의 소유자가 아니다. 그러므로 포함된 객체에 대한 통제 권한이 없다. 따라서 player 의 구현 코드 내에서 어디에서도 gun 객체를 해제하면 안된다.
+
+선택적 집합 관계에서는 프로그램의 어느 지점에서 포함된 객체를 설정하지 않았을 수 있다. 그러므로 집합 포인터를 사용할 때는 조심해야 한다. 포인터에 대한 어떤 접근도 설정되지 않았고, 널인 포인터는 세그멘테이션 오류를 일으킬 수 있기 때문이다. 그러한 이유로 player_shoot 함수에서 gun 포인터가 유효한지 체크해야 한다. 만약 집합 포인터가 NULL 이라면, player 객체를 사용하는 코드는 이 객체를 잘못 사용한다는 의미가 된다. 이때는 프로세스의 exit 코드로 1을 반환해 실행을 중단한다.
+
+
+
+```c
+// gun.c
+#include <stdlib.h>
+
+typedef int bool_t;
+
+// 속성 구조체
+typedef struct {
+    int bullets;
+} gun_t;
+
+// 메모리 할당자
+gun_t* gun_new() {
+    return (gun_t*)malloc(sizeof(gun_t));
+}
+
+// 생성자
+void gun_ctor(gun_t* gun, int initial_bullets) {
+    gun->bullets = 0;
+    if (initial_bullets > 0) {
+        gun->bullets = initial_bullets;
+	}
+}
+
+// 소멸자
+void gun_dtor(gun_t* gun) {
+    // 할 일 없음
+}
+
+// 행위 함수
+bool_t gun_has-bullets(gun_t* gun) {
+    return (gun->bullets > 0);
+}
+            
+void gun_trigger(gun_t* gun) {
+    gun->bullets--;
+}
+
+void gun_refill(gun_t* gun) {
+    gun->bullets = 7;
+}
+```
+
+이 코드는 간단하다. 그리고 총 객체가 다른 객체에 포함되리라는  사항을 알지 못하는 방식으로 작성되었다. 마지막으로 다음 코드는 플레이어 객체와 총 객체를 생성하는 짧은 시나리오를 나타낸다. 플레이어는 총을 집어 들고 탄약이 남지 않을때까지 총을 발사한다. 그 다음 플레이어는 총을 재장전해 같은 행위를 한다. 마지막에는 총을 내려놓는다.
+
+```c
+//main.c
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "player.h"
+#include "gun.h"
+
+int main(int argc, char** argv) {
+    // 총 객체를 만들고 생성하기
+    struct gun_t* gun = gun_new();
+    gun_ctor(gun, 3);
+    
+    // 플레이어(player) 객체를 만들고 생성하기
+    struct player_t* player = player_new();
+    player_ctor(player, "Billy");
+    
+    // 집합 관계가 시작된다.
+    player_pickup_gun(player, gun);
+    
+    // 총알이 남지 않을 때까지 쏜다.
+    while (gun_has_bullets(gun)) {
+        player_shoot(player);
+    }
+    
+    // 총을 재장전한다.
+    gun_refilll(gun);
+    
+    // 총알이 남지 않을 때까지 쏜다.
+    while (gun_has_bullets(gun)) {
+        player_shoot(player);
+    }
+    
+    // 합성 관계를 종료한다.
+    player_drop_gun(player);
+    
+    // 플레이어 객체를 소멸 및 해제한다.
+    player_dtor(player);
+    free(player);
+    
+    // 총 객체를 소멸 및 해제한다.
+    gun_dtor(gun);
+    free(gun);
+    
+    return 0;
+}
+```
+
+gun 과 player 객체는 서로에 대해 독립적이다. 이들 객체를 생성하고 소멸하는 역할을 맡는 로직을 main 함수에 해당한다. 실행의 어느 지점에서 객체들은 집합관계를 형성하며 각자의 역할을 수행하고, 다음 어느 지점에서 분리된다. 집합에서 중요한 점은 포함된 객체의 수명을 컨테이너 객체가 변경하지 못한다는 점이다. 그리고 이 규칙을 따르는 한, 메모리 문제는 발생하지 않는다.
+
+실제 프로젝트에서 생성된 객체 모델에서, 집합 관계는 합성 관계의 수보다 일반적으로 더 많다. 또한 집합 관계는 외부 코드에서 더 많이 볼 수 있는데, 집합 관계를 만들려면 최소한 컨테이너 객체의 공용 인터페이스에서, 지정된 일부 행위 함수가 포함된 객체를 설정 및 재설정해야 하기 때문이다.
+
+앞의 예제에서 처럼 gun 과 player 객체는 처음부터 분리되어 있다. 잠시 연관되었다가 곧 다시 분리된다. 이는 집합 관계가 영구적인 관계인 합성 관계와는 달리 일시적이라는 의미이다. 이는 합성이 객체 간 __소유__ (to-have) 관계의 더 강한 형태이며, 반면 집합은 더 약한 관계임을 나타낸다.
+
+여기서 질문이 하나 떠오른다. 만약 집합 관계가 두 객체 사이에서 일시적이라면, 객체에 해당하는 클래스 사이에서도 관계가 일시적일까? 아니다. 집합 관계는 클래스에서는 영구적이다. 만약 나중에 서로 다른 자료형의 두 객체가 집합 관계를 기반으로 관계가 생길 조금의 여지가 있다면, 이 자료형은 영구적으로 집합 관계여야 한다. 합성도 마찬가지이다.
+
+집합 관계가 될 가능성이 작더라도 컨테이너 객체의 속성 구조체에서는 어떤 포인터를 선언해야 한다. 그리고 이는 속성 구조체가 영구적으로 변경된다는 점을 의미한다. 물론 클래스 기반의 프로그래밍 언어에만 해당한다.
+
+합성과 집합은 어떤 객체의 소유를 설명한다. 즉, 이들 관계는 to-have, 또는 has-a 관계를 나타낸다. 플레이어가 총을 __가지고 있다__ 또는 차가 엔진을 __갖고 있다__ 와 같다. 객체가 다른 객체를 소유한다고 간주할 때마다 이러한 객체 사이에는 합성 또는 집합 관계가 성립해야 한다.
+
+
+
+## 7.5 마무리
+
+- 클래스와 객체 간에 가능한 관계의 유형
+- 클래스, 객체, 인스턴스, 참조 사이의 차이와 유사성
+- 합성에서 컨테이너에 포함된 객체는 자신을 포함하는 컨테이너 객체에 전적으로 의존한다.
+- 집합에서는 컨테이너에 포함된 객체가 컨테이너 객체에 어떠한 의존성도 갖지 않는다.
+- 객체 사이에서 집합이 일시적일 수 있으나, 객체의 자료형 사이에서는 영구불변한 것으로 정의된다.
 
